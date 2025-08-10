@@ -2,6 +2,8 @@ import json
 import time
 import traceback
 
+import schedule
+
 from modules.log import get_logger
 from modules.task import get_task
 from modules.trader import get_trader
@@ -11,6 +13,10 @@ from modules.webhook import get_webhook
 def run():
     try:
         task, trader, webhook, logger = get_task(), get_trader(), get_webhook(), get_logger()
+
+        start_msg = "### [CHECK] ###"
+        logger.info(start_msg)
+
         order_uuid = task.pop()
         order_data = trader.get_order_data(order_uuid)
 
@@ -26,26 +32,22 @@ def run():
         else:
             task.push(order_uuid)
 
+        end_msg = "-" * len(start_msg)
+        logger.info(end_msg)
+
     except Exception:
         traceback.print_exc()
-    except KeyboardInterrupt:
-        exit(0)
 
 
 def main():
-    epoch = 0
+    schedule.every(5).seconds.do(run)
+
     while True:
-        epoch += 1
-        start_msg = f"### [CHECK] Epoch: {epoch} ###"
-        end_msg = "-" * len(start_msg)
-        print(start_msg)
-        print()
-
-        run()
-        time.sleep(1)
-
-        print(end_msg)
-        print()
+        try:
+            schedule.run_pending()
+            time.sleep(1)
+        except KeyboardInterrupt:
+            exit(0)
 
 
 if __name__ == "__main__":

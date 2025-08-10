@@ -23,6 +23,9 @@ class Task:
     def size(self) -> int:
         return self.broker.llen(self.queue_name)
 
+    def is_empty(self) -> bool:
+        return self.size() == 0
+
 
 if __name__ == "__main__":
     task = Task()

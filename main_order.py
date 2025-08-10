@@ -3,6 +3,7 @@ import time
 import traceback
 from math import ceil
 
+import schedule
 from dotenv import load_dotenv
 
 from modules.gpt import get_gpt
@@ -13,14 +14,20 @@ from modules.webhook import get_webhook
 
 load_dotenv()
 
-
-DEBUG = True
+EPOCH = 0
 
 
 def run():
+    global EPOCH
+    EPOCH += 1
+
     try:
         gpt, trader, task, webhook, logger = get_gpt(), get_trader(), get_task(), get_webhook(), get_logger()
         tickers = ["KRW-PENGU", "KRW-DOGE", "KRW-MOODENG"]  # 펭귄, 강아지, 하마
+
+        start_msg = f"### [ORDER] Epoch: {EPOCH} ###"
+        logger.info(start_msg)
+
         for ticker in tickers:
             data = trader.get_data(ticker)
             gpt_answer = gpt.ask_with_data(data)
@@ -43,26 +50,23 @@ def run():
                     logger.info("\n%s\n", json.dumps(sell_resp, indent=4))
                     webhook.send_message(trader.get_webhook_message_about_sell_open(sell_resp))
 
+        end_msg = "-" * len(start_msg)
+        logger.info(end_msg)
+
     except Exception:
         traceback.print_exc()
-    except KeyboardInterrupt:
-        exit(0)
 
 
 def main():
-    epoch = 0
+    # schedule.every(1).minute.do(run)
+    schedule.every(1).hour.do(run)
+
     while True:
-        epoch += 1
-        start_msg = f"### [ORDER] Epoch: {epoch} ###"
-        end_msg = "-" * len(start_msg)
-        print(start_msg)
-        print()
-
-        run()
-        time.sleep(1)
-
-        print(end_msg)
-        print()
+        try:
+            schedule.run_pending()
+            time.sleep(60)
+        except KeyboardInterrupt:
+            exit(0)
 
 
 if __name__ == "__main__":
