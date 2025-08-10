@@ -1,0 +1,18 @@
+[Unit]
+Description=main_order.py
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/ssm-user/ai-auto-trader/.venv/bin/python3 /home/ssm-user/ai-auto-trader/main_order.py
+WorkingDirectory=/home/ssm-user/ai-auto-trader
+Restart=always
+RestartSec=5
+User=ssm-user
+Group=ssm-user
+StandardOutput=append:/var/log/main_order.log
+StandardError=append:/var/log/main_order.log
+EnvironmentFile=/home/ssm-user/ai-auto-trader/.env
+
+[Install]
+WantedBy=multi-user.target
