@@ -1,5 +1,14 @@
 # ai-auto-trader
 
+## Local
+
+```
+$ python3 main.py
+```
+
+
+## ETC
+
 ```
 $ curl https://ifconfig.me
 <IP>
