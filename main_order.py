@@ -1,23 +1,26 @@
 import traceback
+from pprint import pprint
 
 from dotenv import load_dotenv
 
-from app import GPT, Trader
+from app.gpt import GPT
+from app.trader import Trader
 
 load_dotenv()
 
 
-DEBUG = False
+DEBUG = True
 
 
 def run():
     try:
         gpt, trader = GPT(), Trader()
         tickers = ["KRW-PENGU", "KRW-DOGE", "KRW-MOODENG"]  # 펭귄, 강아지, 하마
+        wait_order_uuids = []
         for ticker in tickers:
             data = trader.get_data(ticker)
             gpt_answer = gpt.ask_with_data(data)
-            if gpt_answer.decision == "buy":
+            if gpt_answer.decision == "buy":  # bid
                 if DEBUG:
                     print(f"[Ticker] {ticker}")
                     print("[Decision] Buy")
@@ -32,12 +35,14 @@ def run():
                     continue
 
                 buy_resp = trader.buy(ticker, 5_000)  # 5000원 만큼씩 매수
-                if buy_resp.get("uuid"):
+                buy_order_uuid = buy_resp.get("uuid")
+                wait_order_uuids.append(buy_order_uuid)
+                if buy_order_uuid:
                     # 매수한 코인 개수 계산 (5000원 / 현재가격)
                     current_price = trader.get_current_price(ticker)
                     estimated_count = 5_000 / current_price
                     if DEBUG:
-                        print(f"[Success] Buy order placed successfully")
+                        pprint(buy_resp)
                     else:
                         print(f"{ticker} | Buy | Volume: 5,000 KRW | Count: {estimated_count:.2f} | Success")
                 else:
@@ -45,7 +50,7 @@ def run():
                         print(f"[Error] Buy order failed: {buy_resp}")
                     else:
                         print(f"{ticker} | Buy | Volume: 0 KRW | Count: 0 | Error: Order failed")
-            elif gpt_answer.decision == "sell":
+            elif gpt_answer.decision == "sell":  # ask
                 if DEBUG:
                     print(f"[Ticker] {ticker}")
                     print("[Decision] Sell")
@@ -63,7 +68,7 @@ def run():
                         sell_resp = trader.sell(ticker, balance)
                         if sell_resp.get("uuid"):
                             if DEBUG:
-                                print(f"[Success] Sell order placed successfully (Value: {total_value:.0f} KRW)")
+                                pprint(sell_resp)
                             else:
                                 print(
                                     f"{ticker} | Sell | Volume: {total_value:.0f} KRW | Count: {balance:.2f} | Success"

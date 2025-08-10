@@ -1,152 +1,16 @@
-import json
 import os
-
-# import sqlite3
-from typing import Any
+from datetime import datetime
 
 import pandas as pd
 import pyupbit
 import requests
 import ta
 from dotenv import load_dotenv
-from openai import OpenAI
-
-from schema import Answer
-
-# Initialize SQLite database connection
-# conn = sqlite3.connect("logs.db")
-# cursor = conn.cursor()
-
-# Create a table for logs if it doesn't exist
-# cursor.execute(
-#     """
-# CREATE TABLE IF NOT EXISTS logs (
-#     id INTEGER PRIMARY KEY AUTOINCREMENT,
-#     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-#     message TEXT
-# )
-# """
-# )
-# conn.commit()
-
 
 load_dotenv()
 
 UPBIT_ACCESS_KEY = os.getenv("UPBIT_ACCESS_KEY")
 UPBIT_SECRET_KEY = os.getenv("UPBIT_SECRET_KEY")
-
-
-class GPT:
-    def __init__(self):
-        self.openai_client = OpenAI()
-        self.system_prompt = "\n".join(
-            [
-                "You are an expert in cryptocurrency scalping (초단타) trading.",
-                "Your strategy is to make quick profits from small price movements within minutes.",
-                "Analyze the provided 1-minute OHLCV data and make rapid trading decisions.",
-                "",
-                "SCALPING STRATEGY RULES:",
-                "🚀 PRIMARY GOAL: MAKE QUICK PROFITS! BE AGGRESSIVE!",
-                "",
-                "1. ENTRY SIGNALS (BUY) - LOOK FOR THESE ACTIVELY:",
-                "   - Price above SMA5 or SMA10 (upward momentum)",
-                "   - RSI oversold (<30) and starting to recover",
-                "   - MACD bullish crossover or increasing histogram",
-                "   - Price bouncing off Bollinger Band lower band",
-                "   - Stochastic oversold (<20) and turning up",
-                "   - Volume above average (>100% of volume SMA)",
-                "   - Any combination of positive technical signals",
-                "   ⭐ BE READY TO BUY ON TECHNICAL MOMENTUM!",
-                "",
-                "2. EXIT SIGNALS (SELL) - BUT DON'T BE TOO EAGER:",
-                "   - Good profit: 2-5% gain (don't be greedy, but don't sell too early)",
-                "   - RSI overbought (>70) with declining momentum",
-                "   - Price hitting Bollinger Band upper band",
-                "   - MACD bearish crossover or decreasing histogram",
-                "   - Stochastic overbought (>80) and turning down",
-                "   - Volume declining significantly (<80% of average)",
-                "   - Stop loss: 2-3% loss (give some room for volatility)",
-                "",
-                "3. TRADING MINDSET:",
-                "   - FAVOR BUY decisions when you have KRW available",
-                "   - Only SELL when you have clear profit or strong loss",
-                "   - HOLD only when truly uncertain",
-                "   - Take calculated risks - this is scalping!",
-                "",
-                "4. DECISION PRIORITY (IMPORTANT):",
-                "   - BUY: If any positive momentum signals (be optimistic!)",
-                "   - SELL: Only if you have good profits (>2%) or significant losses (>2%)",
-                "   - HOLD: Rarely - only when completely sideways",
-                "",
-                "Response in JSON format:",
-                "",
-                "Response Examples (FAVOR BUY WHEN POSSIBLE):",
-                '{"decision": "buy", "reason": "3 green candles in a row with increasing volume, momentum building"}',
-                '{"decision": "buy", "reason": "Price bounced off recent low, small volume increase, scalp opportunity"}',
-                '{"decision": "buy", "reason": "Consolidation pattern breaking upward, good entry point"}',
-                '{"decision": "buy", "reason": "Minor dip finished, showing signs of recovery, quick scalp"}',
-                '{"decision": "sell", "reason": "Hit 3.2% profit target, volume declining, secure gains"}',
-                '{"decision": "sell", "reason": "2.8% loss, clear downtrend, cut losses"}',
-                '{"decision": "hold", "reason": "Completely flat movement, no clear direction"}',
-            ]
-        )
-
-    def get_system_prompt(self) -> str:
-        return self.system_prompt
-
-    def ask_with_data(self, data: Any) -> Answer:
-        if isinstance(data, pd.DataFrame):
-            data = data.to_string()  # JSON 대신 문자열 형태로 변환
-
-        response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": self.system_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": f"""🚀 SCALPING ANALYSIS REQUEST 🚀
-
-=== CURRENT TRADING DATA ===
-{data}
-
-=== SCALPING DECISION NEEDED ===
-Analyze this data for QUICK SCALPING opportunities:
-
-📊 TECHNICAL ANALYSIS (USE THESE INDICATORS):
-- RSI: Is it oversold (<30), overbought (>70), or neutral?
-- MACD: Is it bullish/bearish? Is momentum increasing/decreasing?
-- Moving Averages: Is price above/below SMA5, SMA10?
-- Bollinger Bands: Is price at upper/middle/lower band?
-- Stochastic: Is it oversold/overbought/neutral?
-- Volume: Is it above/below average? Any spikes?
-
-💰 PROFIT/LOSS STATUS:
-- If you own this coin: Is it profitable? How much % gain/loss?
-- Should you take quick profits (1-3% target) or cut losses?
-
-⚡ ENTRY/EXIT TIMING:
-- Is this the right moment for a quick BUY scalp?
-- Or should you SELL to take profits/cut losses?
-- Is momentum building up or dying down?
-
-Remember: This is SCALPING - quick in, quick out! Don't overthink, follow the momentum!""",
-                },
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "answer",
-                    "schema": Answer.model_json_schema() | {"additionalProperties": False},
-                    "strict": True,
-                },
-            },
-        )
-        response_text = response.choices[0].message.content
-        response_data = json.loads(response_text)
-        return Answer(decision=response_data["decision"], reason=response_data["reason"])
 
 
 class Trader:
@@ -194,11 +58,12 @@ class Trader:
         }
         """
         orders = [
-            self.trader.get_order(ticker, state="wait"),
-            self.trader.get_order(ticker, state="watch"),
-            self.trader.get_order(ticker, state="done"),
-            self.trader.get_order(ticker, state="cancel"),
+            *self.trader.get_order(ticker, state="wait"),
+            *self.trader.get_order(ticker, state="watch"),
+            *self.trader.get_order(ticker, state="done"),
+            *self.trader.get_order(ticker, state="cancel"),
         ]
+        orders.sort(key=lambda x: datetime.strptime(x["created_at"], "%Y-%m-%dT%H:%M:%S+09:00"))
         return orders
 
     # 특정 코인의 현재 가격
@@ -268,11 +133,20 @@ class Trader:
         fear_greed_index = response_data[0]
         return fear_greed_index
 
+    def get_order_by_uuid(self, ticker: str, uuid: str) -> dict:
+        orders = self.get_my_orders(ticker)
+        for order in orders:
+            if order["uuid"] == uuid:
+                return order
+        return None
+
     def get_data(self, ticker: str) -> dict:
         # 초단타를 위한 상세한 데이터 수집
         current_price = self.get_current_price(ticker)
         avg_buy_price = self.get_avg_buy_price(ticker)
         balance = self.get_balance(ticker)
+        print(f"[Ticker] {ticker}")
+        print(f"[Balance] {balance}")
         krw_balance = self.get_my_balance()
 
         # 1분봉 데이터 (최근 50개 - 기술적 분석을 위해 더 많은 데이터 필요)
@@ -367,19 +241,8 @@ class Trader:
 
 def test():
     trader = Trader()
-
-    pengu_price = trader.get_current_price("KRW-PENGU")
-    print(pengu_price)
-
-    pengu_ohlcv = trader.get_ohlcv("KRW-PENGU", count=10, interval="day")
-    print(pengu_ohlcv)
-
-    # print(trader.buy("KRW-PENGU", 5000))
-    print(trader.get_my_orders("KRW-PENGU"))
-
-    print(trader.get_balance("KRW-PENGU"))
-
-    print(trader.sell("KRW-PENGU", 150))
+    pengu_balance = trader.get_balance("KRW-PENGU")
+    print(pengu_balance)
 
 
 if __name__ == "__main__":
