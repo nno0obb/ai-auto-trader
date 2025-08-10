@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from functools import lru_cache
 
 import pandas as pd
 import pyupbit
@@ -9,13 +10,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-UPBIT_ACCESS_KEY = os.getenv("UPBIT_ACCESS_KEY")
-UPBIT_SECRET_KEY = os.getenv("UPBIT_SECRET_KEY")
+
+@lru_cache
+def get_trader():
+    return Trader()
 
 
 class Trader:
     def __init__(self):
-        self.trader = pyupbit.Upbit(UPBIT_ACCESS_KEY, UPBIT_SECRET_KEY)
+        self.upbit_access_key = os.getenv("UPBIT_ACCESS_KEY")
+        self.upbit_secret_key = os.getenv("UPBIT_SECRET_KEY")
+        self.trader = pyupbit.Upbit(self.upbit_access_key, self.upbit_secret_key)
 
     # 한화로 거래 가능한 모든 암호화폐 목록
     def get_all_tickers(self) -> list[str]:
@@ -133,20 +138,14 @@ class Trader:
         fear_greed_index = response_data[0]
         return fear_greed_index
 
-    def get_order_by_uuid(self, ticker: str, uuid: str) -> dict:
-        orders = self.get_my_orders(ticker)
-        for order in orders:
-            if order["uuid"] == uuid:
-                return order
-        return None
+    def get_order_data(self, order_uuid: str) -> dict:
+        return self.trader.get_order(order_uuid)
 
     def get_data(self, ticker: str) -> dict:
         # 초단타를 위한 상세한 데이터 수집
         current_price = self.get_current_price(ticker)
         avg_buy_price = self.get_avg_buy_price(ticker)
         balance = self.get_balance(ticker)
-        print(f"[Ticker] {ticker}")
-        print(f"[Balance] {balance}")
         krw_balance = self.get_my_balance()
 
         # 1분봉 데이터 (최근 50개 - 기술적 분석을 위해 더 많은 데이터 필요)
@@ -237,6 +236,90 @@ class Trader:
             "recent_ohlcv_with_indicators": ohlcv_data.tail(10).round(2).to_string(),  # 최근 10개 캔들과 지표들
             "fear_greed_index": self.get_fear_greed_index(),
         }
+
+    def get_webhook_message_about_buy_open(self, order_data: dict) -> str:
+        ticker = order_data["market"]
+        price = order_data["price"]
+        fee = order_data["reserved_fee"]
+        timestamp = datetime.strptime(order_data["created_at"], "%Y-%m-%dT%H:%M:%S+09:00")
+        timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        uuid = order_data["uuid"]
+        message = "\n".join(
+            [
+                "--- 📭 [OPEN] BUY 🛍️ ---",
+                f"🪙 {ticker}",
+                f"💰 {price} KRW",
+                f"💸 {fee} KRW",
+                f"🕒 {timestamp_str}",
+                f"🔑 {uuid}",
+                "------------------------",
+            ]
+        )
+        return message
+
+    def get_webhook_message_about_buy_close(self, order_data: dict) -> str:
+        ticker = order_data["market"]
+        avg_price = order_data["trades"][0]["price"]
+        fee = order_data["reserved_fee"]
+        executed_volume = order_data["executed_volume"]
+        total = float(avg_price) * float(executed_volume) + float(fee)
+        timestamp = datetime.strptime(order_data["created_at"], "%Y-%m-%dT%H:%M:%S+09:00")
+        timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        uuid = order_data["uuid"]
+        message = "\n".join(
+            [
+                "=== 📫 [CLOSE] BUY 🛍️ ===",
+                f"🪙 {ticker}",
+                f"💰 {total} KRW",
+                f"🧆 {executed_volume} ea / {avg_price} KRW",
+                f"💸 {fee} KRW",
+                f"🕒 {timestamp_str}",
+                f"🔑 {uuid}",
+                "=========================",
+            ]
+        )
+        return message
+
+    def get_webhook_message_about_sell_open(self, order_data: dict) -> str:
+        ticker = order_data["market"]
+        volume = order_data["volume"]
+        timestamp = datetime.strptime(order_data["created_at"], "%Y-%m-%dT%H:%M:%S+09:00")
+        timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        uuid = order_data["uuid"]
+        message = "\n".join(
+            [
+                "--- 📭 [OPEN] SELL 🪝 ---",
+                f"🪙 {ticker}",
+                f"🧆 {volume} ea",
+                f"🕒 {timestamp_str}",
+                f"🔑 {uuid}",
+                "------------------------",
+            ]
+        )
+        return message
+
+    def get_webhook_message_about_sell_close(self, order_data: dict) -> str:
+        ticker = order_data["market"]
+        executed_volume = order_data["executed_volume"]
+        avg_price = order_data["trades"][0]["price"]
+        paid_fee = order_data["paid_fee"]
+        total = float(avg_price) * float(executed_volume) + float(paid_fee)
+        timestamp = datetime.strptime(order_data["created_at"], "%Y-%m-%dT%H:%M:%S+09:00")
+        timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        uuid = order_data["uuid"]
+        message = "\n".join(
+            [
+                "=== 📫 [CLOSE] SELL 🪝 ===",
+                f"🪙 {ticker}",
+                f"💰 {total} KRW",
+                f"🧆 {executed_volume} ea / {avg_price} KRW",
+                f"💸 {paid_fee} KRW",
+                f"🕒 {timestamp_str}",
+                f"🔑 {uuid}",
+                "=========================",
+            ]
+        )
+        return message
 
 
 def test():

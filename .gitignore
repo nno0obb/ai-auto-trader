@@ -4,3 +4,10 @@
 
 # Dotenv
 .env
+
+# Redis
+dump.rdb
+
+# Log
+logs/*.log
+!logs/.gitkeep

@@ -1,4 +1,11 @@
+from functools import lru_cache
+
 import redis
+
+
+@lru_cache
+def get_task():
+    return Task()
 
 
 class Task:
@@ -11,7 +18,13 @@ class Task:
         self.broker.lpush(self.queue_name, message)
 
     def pop(self) -> str:
-        return self.consumer.brpop(self.queue_name, timeout=0)
+        return self.consumer.brpop(self.queue_name, timeout=0)[1]
 
     def size(self) -> int:
         return self.broker.llen(self.queue_name)
+
+
+if __name__ == "__main__":
+    task = Task()
+    task.push("test")
+    print(task.pop())

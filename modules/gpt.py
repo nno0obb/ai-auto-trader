@@ -1,5 +1,5 @@
 import json
-import os
+from functools import lru_cache
 from typing import Any
 
 import pandas as pd
@@ -9,8 +9,10 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-UPBIT_ACCESS_KEY = os.getenv("UPBIT_ACCESS_KEY")
-UPBIT_SECRET_KEY = os.getenv("UPBIT_SECRET_KEY")
+
+@lru_cache
+def get_gpt():
+    return GPT()
 
 
 class Answer(BaseModel):
